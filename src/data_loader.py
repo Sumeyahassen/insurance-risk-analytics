@@ -1,32 +1,49 @@
 import pandas as pd
 import numpy as np
+import os
+
+# Get the project root dynamically
+PROJECT_ROOT = os.path.abspath(os.path.join(os.path.dirname(__file__), '..'))
 
 def load_raw_data():
-    """Load the raw pipe-delimited dataset"""
-    df = pd.read_csv('data/insurance_data.csv', sep='|', low_memory=False)
+    """Load the raw insurance dataset with absolute path"""
+    data_path = os.path.join(PROJECT_ROOT, 'data', 'insurance_data.csv')
+    
+    if not os.path.exists(data_path):
+        raise FileNotFoundError(f"Raw data not found at: {data_path}")
+    
+    df = pd.read_csv(data_path, sep='|', low_memory=False)
     df.columns = [col.strip() for col in df.columns]
     return df
 
-def create_cleaned_data():
-    """Clean the data and save cleaned version"""
-    df = load_raw_data()
+
+def load_cleaned_data():
+    """Load or create cleaned version"""
+    cleaned_path = os.path.join(PROJECT_ROOT, 'data', 'insurance_data_cleaned.csv')
     
-    # Basic cleaning
-    df['TransactionMonth'] = pd.to_datetime(df['TransactionMonth'])
+    try:
+        df = pd.read_csv(cleaned_path)
+        print("✅ Loaded existing cleaned data")
+    except FileNotFoundError:
+        print("🛠 Creating cleaned data from raw...")
+        df = load_raw_data()
+        
+        # Cleaning steps
+        df['TransactionMonth'] = pd.to_datetime(df['TransactionMonth'])
+        df = df.dropna(subset=['TotalPremium', 'TotalClaims', 'Province', 'Gender'])
+        
+        df['LossRatio'] = df['TotalClaims'] / df['TotalPremium'].replace(0, np.nan)
+        df['Margin'] = df['TotalPremium'] - df['TotalClaims']
+        df['ClaimOccurred'] = (df['TotalClaims'] > 0).astype(int)
+        
+        # Save cleaned file
+        df.to_csv(cleaned_path, index=False)
+        print(f"✅ Cleaned dataset created and saved with {df.shape[0]} rows")
     
-    # Remove rows with missing key values
-    df = df.dropna(subset=['TotalPremium', 'TotalClaims', 'Province', 'Gender'])
-    
-    # Create key metrics
-    df['LossRatio'] = df['TotalClaims'] / df['TotalPremium'].replace(0, np.nan)
-    df['Margin'] = df['TotalPremium'] - df['TotalClaims']
-    df['ClaimOccurred'] = (df['TotalClaims'] > 0).astype(int)
-    
-    # Save cleaned version
-    df.to_csv('data/insurance_data_cleaned.csv', index=False)
-    print(f"✅ Cleaned dataset saved with {df.shape[0]} rows and {df.shape[1]} columns")
     return df
 
-# Run this when script is executed directly
+
+# For direct testing
 if __name__ == "__main__":
-    create_cleaned_data()
+    df = load_cleaned_data()
+    print("Final Shape:", df.shape)
